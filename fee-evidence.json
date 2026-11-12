@@ -1,0 +1,50 @@
+{
+  "accessed_at": "2026-11-12",
+  "currency_market": "IDR Market (INDODAX Pro Mode)",
+  "official_source": {
+    "title": "Rincian Biaya Transaksi di INDODAX",
+    "url": "https://help.indodax.com/hc/id/articles/4416646599705-Rincian-Biaya-Transaksi-di-INDODAX",
+    "article_id": 4416646599705,
+    "edited_at": "2026-10-07",
+    "last_updated_at": "2026-11-12",
+    "fee_table_image": "https://help.indodax.com/hc/article_attachments/62709720229401",
+    "order_minimum_note": "INDODAX Pro direct orders require at least Rp25,000."
+  },
+  "official_all_in_taker_fee": {
+    "buy": {
+      "service_fee_percent": 0.2,
+      "tax_percent": 0.0,
+      "cfx_fee_percent": 0.00555,
+      "all_in_percent": 0.20555,
+      "decimal_rate": 0.0020555
+    },
+    "sell": {
+      "service_fee_percent": 0.2,
+      "tax_percent": 0.21,
+      "cfx_fee_percent": 0.00555,
+      "all_in_percent": 0.41555,
+      "decimal_rate": 0.0041555
+    }
+  },
+  "public_api_comparison": {
+    "url": "https://indodax.com/api/pairs",
+    "accessed_at": "2026-11-12",
+    "symbols": {
+      "BTCIDR": {
+        "trade_fee_percent_taker": 0.2
+      },
+      "ETHIDR": {
+        "trade_fee_percent_taker": 0.2
+      },
+      "XRPIDR": {
+        "trade_fee_percent_taker": 0.2
+      }
+    },
+    "selection_rule": "Use the higher of the fee returned by the public API and the side-specific official all-in taker fee. The application uses 0.20555% on buys and 0.41555% on sells."
+  },
+  "notes": [
+    "The fee table screenshot embedded in the official article gives the IDR Pro rates shown above.",
+    "Rates are different for buys and sells; applying one 0.2% rate to both sides would understate sell costs.",
+    "This evidence records the public source checked on 2026-11-12. Recheck the fee table and /api/pairs at the beginning of any newly authorized test."
+  ]
+}

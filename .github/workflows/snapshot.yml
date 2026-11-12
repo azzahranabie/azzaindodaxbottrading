@@ -1,0 +1,35 @@
+name: Indodax order-book snapshots
+
+on:
+  schedule:
+    - cron: "15 0,8,16 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: indodax-order-book-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Record actual public order books
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          VERCEL_DEPLOYMENT_URL: ${{ vars.VERCEL_DEPLOYMENT_URL }}
+        run: |
+          if [ -z "$CRON_SECRET" ] || [ -z "$VERCEL_DEPLOYMENT_URL" ]; then
+            echo "Configure CRON_SECRET and VERCEL_DEPLOYMENT_URL in repository settings." >&2
+            exit 1
+          fi
+          hour="$(date -u +%H)"
+          slot="$((10#$hour / 8 * 8))"
+          scheduled_at="$(date -u +%Y-%m-%d)T$(printf '%02d' "$slot"):00:00Z"
+          curl --fail-with-body --silent --show-error --retry 2 \
+            -X POST \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "X-Scheduled-Time: ${scheduled_at}" \
+            -H "Content-Type: application/json" \
+            -d '{"order_size_idr":10000000}' \
+            "${VERCEL_DEPLOYMENT_URL%/}/api/snapshot"

@@ -1,0 +1,33 @@
+name: Indodax dry-run tick
+
+on:
+  schedule:
+    - cron: "0 */4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: indodax-dry-run-tick
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call the protected Vercel endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          VERCEL_DEPLOYMENT_URL: ${{ vars.VERCEL_DEPLOYMENT_URL }}
+        run: |
+          if [ -z "$CRON_SECRET" ] || [ -z "$VERCEL_DEPLOYMENT_URL" ]; then
+            echo "Configure CRON_SECRET and VERCEL_DEPLOYMENT_URL in repository settings." >&2
+            exit 1
+          fi
+          hour="$(date -u +%H)"
+          slot="$((10#$hour / 4 * 4))"
+          scheduled_at="$(date -u +%Y-%m-%d)T$(printf '%02d' "$slot"):00:00Z"
+          curl --fail-with-body --silent --show-error --retry 2 \
+            -X POST \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "X-Scheduled-Time: ${scheduled_at}" \
+            "${VERCEL_DEPLOYMENT_URL%/}/api/tick"
