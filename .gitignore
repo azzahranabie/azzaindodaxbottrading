@@ -7,3 +7,5 @@ __pycache__/
 .bot_data.json
 .bot-state-*
 assignment-review.pdf
+# Google App Engine generated folder
+appengine-generated/
