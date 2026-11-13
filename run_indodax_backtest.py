@@ -133,7 +133,162 @@ def _metrics(equity_curve, trades, orders, start_equity, end_equity, start_time,
     }
 
 
-def backtest(payload, snapshots, start, end, starting_cash=100_000_000, min_samples=6):
+def compare_forward_signals(expected_signals, forward_log, timeframe_seconds):
+    start = _dt(forward_log.get("forward_start_at"))
+    end = _dt(forward_log.get("generated_at"))
+    if end <= start:
+        raise ValueError("generated_at harus setelah forward_start_at")
+    start_ts = start.timestamp()
+    end_ts = end.timestamp()
+    expected = {
+        (item["symbol"], int(item["candle_time"])): item["signal"]
+        for item in expected_signals
+        if start_ts <= int(item["candle_time"]) + timeframe_seconds <= end_ts
+    }
+    actual = {}
+    duplicate_count = 0
+    events = forward_log.get("events", [])
+    if not isinstance(events, list):
+        raise ValueError("Field events pada forward log harus berupa array")
+    for event in events:
+        if (
+            not isinstance(event, dict)
+            or event.get("status") != "processed"
+            or event.get("signal") not in {"buy", "sell", "hold"}
+            or not event.get("symbol")
+            or event.get("candle_time") is None
+        ):
+            continue
+        key = (event["symbol"], int(event["candle_time"]))
+        close_time = key[1] + timeframe_seconds
+        if not start_ts <= close_time <= end_ts:
+            continue
+        if key in actual:
+            duplicate_count += 1
+            continue
+        actual[key] = event["signal"]
+
+    compared = sorted(expected.keys() & actual.keys())
+    matched = sum(expected[key] == actual[key] for key in compared)
+    mismatches = [
+        {
+            "symbol": symbol,
+            "candle_time": candle_time,
+            "backtest_signal": expected[(symbol, candle_time)],
+            "forward_signal": actual[(symbol, candle_time)],
+        }
+        for symbol, candle_time in compared
+        if expected[(symbol, candle_time)] != actual[(symbol, candle_time)]
+    ]
+    missing = [
+        {"symbol": symbol, "candle_time": candle_time}
+        for symbol, candle_time in sorted(expected.keys() - actual.keys())
+    ]
+    extra = [
+        {"symbol": symbol, "candle_time": candle_time}
+        for symbol, candle_time in sorted(actual.keys() - expected.keys())
+    ]
+    expected_count = len(expected)
+    compared_count = len(compared)
+    if expected_count and matched == expected_count and not extra and not duplicate_count:
+        status = "complete"
+    elif compared_count < expected_count or not expected_count:
+        status = "incomplete"
+    else:
+        status = "mismatch"
+    return {
+        "status": status,
+        "window_start": start.isoformat(),
+        "window_end": end.isoformat(),
+        "expected_signals": expected_count,
+        "observed_signals": len(actual),
+        "compared_signals": compared_count,
+        "matched_signals": matched,
+        "coverage_rate": compared_count / expected_count if expected_count else None,
+        "signal_match_rate": matched / expected_count if expected_count and compared_count else None,
+        "duplicate_forward_signals": duplicate_count,
+        "mismatches": mismatches,
+        "missing_signals": missing,
+        "extra_signals": extra,
+    }
+
+
+def compare_forward_fills(backtest_orders, forward_log, timeframe_seconds):
+    forward_orders = {}
+    start = _dt(forward_log.get("forward_start_at")).timestamp()
+    end = _dt(forward_log.get("generated_at")).timestamp()
+    for event in forward_log.get("events", []):
+        if (
+            not isinstance(event, dict)
+            or event.get("status") != "processed"
+            or event.get("candle_time") is None
+        ):
+            continue
+        candle_close = int(event["candle_time"]) + timeframe_seconds
+        if not start <= candle_close <= end:
+            continue
+        for order in event.get("orders", []):
+            if not isinstance(order, dict) or order.get("side") not in {"buy", "sell"}:
+                continue
+            key = (order.get("symbol") or event.get("symbol"), order["side"], candle_close)
+            if key[0] and key not in forward_orders:
+                forward_orders[key] = (event, order)
+
+    comparisons = []
+    matched_keys = set()
+    delay_unavailable = 0
+    for order in backtest_orders:
+        key = (order["symbol"], order["side"], int(order["time"]))
+        match = forward_orders.get(key)
+        if match is None:
+            continue
+        matched_keys.add(key)
+        event, forward_order = match
+        modeled_fill = float(order["fill_price"])
+        actual_fill = float(forward_order["average_fill"])
+        delay_seconds = None
+        try:
+            delay_seconds = (
+                _dt(forward_order["time"]).timestamp() - int(event["candle_time"]) - timeframe_seconds
+            )
+        except (KeyError, TypeError, ValueError):
+            delay_unavailable += 1
+        comparisons.append(
+            {
+                "symbol": key[0],
+                "side": key[1],
+                "candle_close_time": key[2],
+                "backtest_fill": modeled_fill,
+                "forward_fill": actual_fill,
+                "fill_difference_idr": actual_fill - modeled_fill,
+                "fill_difference_fraction": actual_fill / modeled_fill - 1 if modeled_fill else None,
+                "backtest_fee_idr": float(order.get("fee_idr") or 0),
+                "forward_fee_idr": float(forward_order.get("fee_idr") or 0),
+                "fee_difference_idr": float(forward_order.get("fee_idr") or 0)
+                - float(order.get("fee_idr") or 0),
+                "forward_spread_fraction": event.get("spread_fraction"),
+                "forward_fill_vs_signal_fraction": forward_order.get("fill_vs_signal_fraction"),
+                "delay_seconds_after_candle_close": delay_seconds,
+            }
+        )
+    return {
+        "matched_orders": len(comparisons),
+        "unmatched_backtest_orders": max(0, len(backtest_orders) - len(comparisons)),
+        "unmatched_forward_orders": len(forward_orders.keys() - matched_keys),
+        "delay_unavailable_orders": delay_unavailable,
+        "comparisons": comparisons,
+    }
+
+
+def backtest(
+    payload,
+    snapshots,
+    start,
+    end,
+    starting_cash=100_000_000,
+    min_samples=6,
+    forward_log=None,
+):
     symbols = list(payload["candidate_universe"])
     calibration = execution_calibration(snapshots, symbols, min_samples)
     bars = {
@@ -173,6 +328,7 @@ def backtest(payload, snapshots, start, end, starting_cash=100_000_000, min_samp
     equity_curve = [float(cash)]
     trades = []
     orders = []
+    signal_rows = []
     skipped_gaps = 0
     last_equity = Decimal(str(starting_cash))
     for candle_time in all_times:
@@ -196,11 +352,19 @@ def backtest(payload, snapshots, start, end, starting_cash=100_000_000, min_samp
             if not has_contiguous_candles(window, payload["timeframe_seconds"]):
                 skipped_gaps += 1
                 continue
-            signals[symbol] = signal_for(
+            signal = signal_for(
                 window,
                 SETTINGS.entry_period,
                 SETTINGS.exit_period,
                 SETTINGS.sma_period,
+            )
+            signals[symbol] = signal
+            signal_rows.append(
+                {
+                    "symbol": symbol,
+                    "candle_time": signal.candle_time,
+                    "signal": signal.action,
+                }
             )
 
         equity_before_orders = _marked_equity(cash, positions, marks, calibration)
@@ -237,7 +401,7 @@ def backtest(payload, snapshots, start, end, starting_cash=100_000_000, min_samp
                 increment = Decimal(str(payload["pair_metadata"][symbol]["quantity_increment"]))
                 quantity = round_quantity(quantity, increment)
                 fee_rate = max(
-                    SETTINGS.all_in_taker_sell_fee_rate,
+                    Decimal(str(SETTINGS.all_in_taker_sell_fee_rate)),
                     Decimal(str(payload["pair_metadata"][symbol]["trade_fee_percent_taker"])) / Decimal(100),
                 )
                 notional = quantity * fill_price
@@ -283,7 +447,7 @@ def backtest(payload, snapshots, start, end, starting_cash=100_000_000, min_samp
                     cash,
                 )
                 fee_rate = max(
-                    SETTINGS.all_in_taker_buy_fee_rate,
+                    Decimal(str(SETTINGS.all_in_taker_buy_fee_rate)),
                     Decimal(str(payload["pair_metadata"][symbol]["trade_fee_percent_taker"])) / Decimal(100),
                 )
                 budget /= Decimal(1) + fee_rate
@@ -325,8 +489,9 @@ def backtest(payload, snapshots, start, end, starting_cash=100_000_000, min_samp
         last_equity = _marked_equity(cash, positions, marks, calibration)
         equity_curve.append(float(last_equity))
 
-    end_time = datetime.fromtimestamp(end_ts, timezone.utc)
-    actual_start = datetime.fromtimestamp(start_ts, timezone.utc)
+    timeframe_seconds = payload["timeframe_seconds"]
+    actual_start = datetime.fromtimestamp(all_times[0] + timeframe_seconds, timezone.utc)
+    end_time = datetime.fromtimestamp(all_times[-1] + timeframe_seconds, timezone.utc)
     metrics = _metrics(equity_curve, trades, orders, starting_cash, last_equity, actual_start, end_time)
     btc = bars.get("BTCIDR", [])
     btc_window = [
@@ -340,7 +505,7 @@ def backtest(payload, snapshots, start, end, starting_cash=100_000_000, min_samp
         else None
     )
     metrics["btc_buy_and_hold"] = benchmark
-    return {
+    result = {
         "source": "Indodax public history_v2 candles; measured current order-book medians; dry-run fee model",
         "start": actual_start.isoformat(),
         "end": end_time.isoformat(),
@@ -359,6 +524,14 @@ def backtest(payload, snapshots, start, end, starting_cash=100_000_000, min_samp
             "The archived candidate universe contains BTCIDR, ETHIDR, and XRPIDR only; pairs delisted before collection are not included.",
         ],
     }
+    if forward_log is not None:
+        result["signal_comparison"] = compare_forward_signals(
+            signal_rows, forward_log, payload["timeframe_seconds"]
+        )
+        result["execution_comparison"] = compare_forward_fills(
+            orders, forward_log, payload["timeframe_seconds"]
+        )
+    return result
 
 
 def main():
@@ -368,6 +541,11 @@ def main():
     parser.add_argument("--start", type=_dt, default=_dt("2023-11-12T00:00:00Z"))
     parser.add_argument("--end", type=_dt, default=datetime.now(timezone.utc))
     parser.add_argument("--minimum-snapshots", type=int, default=6)
+    parser.add_argument(
+        "--forward-log",
+        type=Path,
+        help="Dashboard export forward test; adds 14-day signal and fill comparisons",
+    )
     parser.add_argument("--output", type=Path, default=Path("crypto_bot/backtest_result.json"))
     args = parser.parse_args()
     try:
@@ -377,6 +555,35 @@ def main():
         if not isinstance(snapshots, list):
             raise ValueError("Snapshot harus berupa array atau export dashboard dengan field snapshots")
         result = backtest(history, snapshots, args.start, args.end, min_samples=args.minimum_snapshots)
+        if args.forward_log:
+            forward_log = json.loads(args.forward_log.read_text(encoding="utf-8"))
+            if not isinstance(forward_log, dict):
+                raise ValueError("Forward log harus berupa object hasil ekspor dashboard")
+            forward_start = _dt(forward_log.get("forward_start_at"))
+            forward_end = _dt(forward_log.get("generated_at"))
+            if forward_end <= forward_start:
+                raise ValueError("Forward log harus memuat generated_at setelah forward_start_at")
+            forward_result = backtest(
+                history,
+                snapshots,
+                forward_start,
+                forward_end,
+                min_samples=args.minimum_snapshots,
+                forward_log=forward_log,
+            )
+            comparison = forward_result["signal_comparison"]
+            fill_comparison = forward_result["execution_comparison"]
+            result["forward_window"] = {
+                "start": forward_result["start"],
+                "end": forward_result["end"],
+                "total_return": forward_result["metrics"]["total_return"],
+                "max_drawdown": forward_result["metrics"]["max_drawdown"],
+                "trade_count": forward_result["metrics"]["trade_count"],
+                "signal_match_rate": comparison["signal_match_rate"],
+                "signal_comparison_status": comparison["status"],
+                "signal_comparison": comparison,
+                "execution_comparison": fill_comparison,
+            }
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(result, indent=2, allow_nan=False) + "\n", encoding="utf-8")
         print(json.dumps({"output": str(args.output), "metrics": result["metrics"], "calibration": result["execution_calibration"]}, indent=2))

@@ -92,6 +92,7 @@ def recalculate(payload):
 
     closed_trades = state.get("closed_trades") or []
     closed_trades = [trade for trade in closed_trades if isinstance(trade, dict)]
+    has_forward_calls = bool(calls)
     pnl_values = [_number(trade.get("net_pnl"), math.nan) for trade in closed_trades]
     pnl_values = [value for value in pnl_values if math.isfinite(value)]
     wins = [value for value in pnl_values if value > 0]
@@ -200,16 +201,16 @@ def recalculate(payload):
             "ending_equity": end_equity if math.isfinite(end_equity) else None,
             "total_return": total_return,
             "max_drawdown": max_drawdown,
-            "trade_count": len(closed_trades),
+            "trade_count": len(closed_trades) if has_forward_calls else None,
             "profit_factor": profit_factor,
             "win_rate": len(wins) / len(closed_trades) if closed_trades else None,
             "average_win": gross_wins / len(wins) if wins else None,
             "average_loss": sum(losses) / len(losses) if losses else None,
         },
         "execution": {
-            "order_count": len(orders),
-            "fees": fees,
-            "spread_slippage_estimate": spread_slippage,
+            "order_count": len(orders) if has_forward_calls else None,
+            "fees": fees if has_forward_calls else None,
+            "spread_slippage_estimate": spread_slippage if has_forward_calls else None,
             "cost_to_gross_profit": cost_ratio,
             "snapshot_count": len(valid_snapshots),
             "median_snapshot_spread": snapshot_median("spread_fraction"),

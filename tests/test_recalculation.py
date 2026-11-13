@@ -44,6 +44,30 @@ class RecalculationTests(unittest.TestCase):
 
         self.assertIsNone(result["forward"]["total_return"])
         self.assertIsNone(result["forward"]["max_drawdown"])
+        self.assertIsNone(result["forward"]["trade_count"])
+        self.assertIsNone(result["execution"]["order_count"])
+        self.assertIsNone(result["execution"]["fees"])
+        self.assertIsNone(result["execution"]["spread_slippage_estimate"])
+
+    def test_completed_call_with_no_trades_reports_measured_zero_costs(self):
+        result = recalculate(
+            {
+                "events": [
+                    {
+                        "type": "call",
+                        "status": "complete",
+                        "time": "2026-11-12T04:00:00Z",
+                        "orders": [],
+                        "errors": [],
+                    }
+                ],
+                "state": {"closed_trades": []},
+            }
+        )
+
+        self.assertEqual(result["forward"]["trade_count"], 0)
+        self.assertEqual(result["execution"]["fees"], 0)
+        self.assertEqual(result["execution"]["spread_slippage_estimate"], 0)
 
 
 if __name__ == "__main__":

@@ -48,6 +48,7 @@
       <article class="panel"><div class="panelhead"><h2>Forward test</h2><span class="pill">tanpa CAGR 14 hari</span></div><div class="panelbody"><div id="forwardMetrics" class="metrics"></div></div></article>
     </section>
     <section class="panel wide"><div class="panelhead"><h2>Eksekusi, biaya, dan benchmark</h2><small>Cost ratio memakai fee dan selisih fill terhadap mid-price dari order book</small></div><div class="panelbody"><div id="executionMetrics" class="metrics"></div></div></section>
+    <section class="panel wide"><div class="panelhead"><h2>Perbandingan fill per order: backtest vs forward</h2><small>Selisih dipasangkan per pasangan, sisi, dan candle; fee, spread, slippage, serta delay ditampilkan terpisah</small></div><div class="tablewrap"><table><thead><tr><th>Penutupan candle</th><th>Pasangan</th><th>Sisi</th><th>Fill backtest</th><th>Fill forward</th><th>Selisih fill/unit (Rp)</th><th>Selisih %</th><th>Fee backtest</th><th>Fee forward</th><th>Selisih fee</th><th>Spread forward</th><th>Slippage vs sinyal</th><th>Delay</th></tr></thead><tbody id="fillComparisonBody"><tr><td class="empty" colspan="13">Belum ada hasil perbandingan.</td></tr></tbody></table></div></section>
     <section class="panel wide"><div class="panelhead"><h2>Kill switch</h2><div class="kill"><strong id="killStatus">Belum diketahui</strong><button class="btn" id="killButton" type="button" disabled>Ubah status</button></div></div><div class="panelbody"><span class="secret-help">Perubahan memerlukan CRON_SECRET dan dicatat ke log. Secret hanya diminta sementara di browser.</span></div></section>
     <section class="panel wide"><div class="panelhead"><h2>Log keputusan terbaru</h2><small id="logCount">0 baris</small></div><div class="tablewrap"><table><thead><tr><th>Waktu</th><th>Pasangan</th><th>Sinyal/status</th><th>Alasan / error</th><th>Order</th></tr></thead><tbody id="eventsBody"><tr><td class="empty" colspan="5">Belum ada log yang dimuat.</td></tr></tbody></table></div></section>
   </main>
@@ -105,7 +106,7 @@
       const capturedAt=Date.parse(payload.generated_at||"");
       const now=Number.isFinite(capturedAt)?capturedAt:Date.now();
       const planned=Number.isFinite(start)?expectedSchedule(start,now,Number(payload.schedule_interval_hours||4)):null;
-      const completedSlots=[...scheduledCalls].filter(slot=>!Number.isFinite(start)||slot>=start).length;
+      const completedSlots=[...scheduledCalls].filter(slot=>(!Number.isFinite(start)||slot>=start)&&slot<=now).length;
       const errorCount=completedCalls.reduce((total,event)=>total+Math.max(Array.isArray(event.errors)?event.errors.length:0,event.status==="error"?1:0),0);
       const killCount=events.filter(event=>event.type==="kill_switch"||(event.type==="call"&&event.status==="kill_switch")).length;
       const initial=Number(payload.initial_cash||state.initial_cash||100000000);
@@ -145,8 +146,10 @@
       setValue("drawdownValue",percent(drawdown),drawdown>0?"negative":"neutral");
       setValue("uptimeValue",planned===null?"—":`${completedSlots} / ${planned}`);
       $("uptimeDetail").textContent=planned?`Uptime ${percent(completedSlots/planned)} · jadwal 4 jam UTC`:"Jadwal belum dikonfigurasi";
-      setValue("tradeCount",String(orders.length));
-      $("errorDetail").textContent=`Error API: ${errorCount} · kill switch: ${killCount}`;
+      setValue("tradeCount",completedCalls.length?String(orders.length):"—");
+      $("errorDetail").textContent=completedCalls.length
+        ?`Error API: ${errorCount} · kill switch: ${killCount}`
+        :"Belum ada log tick; error API dan penggunaan kill switch belum dapat dinilai";
       $("killStatus").textContent=payload.kill_switch?"AKTIF — bot berhenti membuka posisi":"Tidak aktif";
       $("killStatus").className=payload.kill_switch?"negative":"positive";
       $("killButton").disabled=source!=="live";
@@ -154,6 +157,13 @@
       $("backtestStatus").textContent=text(payload.backtest_status,"Belum tersedia");
       const backtest=payload.backtest;
       const backtestMetrics=backtest&&backtest.metrics?backtest.metrics:null;
+      const forwardWindow=backtest&&backtest.forward_window?backtest.forward_window:null;
+      const signalComparison=forwardWindow&&forwardWindow.signal_comparison?forwardWindow.signal_comparison:null;
+      const fillComparisons=forwardWindow&&forwardWindow.execution_comparison&&Array.isArray(forwardWindow.execution_comparison.comparisons)?forwardWindow.execution_comparison.comparisons:[];
+      const fillDifferences=fillComparisons.map(item=>Math.abs(Number(item.fill_difference_idr))).filter(Number.isFinite);
+      const fillDelays=fillComparisons.map(item=>item.delay_seconds_after_candle_close===null?NaN:Number(item.delay_seconds_after_candle_close)).filter(Number.isFinite);
+      const meanFillDifference=fillDifferences.length?fillDifferences.reduce((sum,value)=>sum+value,0)/fillDifferences.length:null;
+      const meanFillDelay=fillDelays.length?fillDelays.reduce((sum,value)=>sum+value,0)/fillDelays.length:null;
       const backtestRows=backtestMetrics?[
         ["Return total",percent(backtestMetrics.total_return)],
         ["CAGR",percent(backtestMetrics.cagr)],
@@ -167,7 +177,7 @@
         ["Ekuitas terakhir",endEquity===null?"Belum ada":money(endEquity)],
         ["Return total",percent(returnTotal)],
         ["Maximum drawdown",percent(drawdown)],
-        ["Jumlah trade selesai",String(trades.length)],
+        ["Jumlah trade selesai",completedCalls.length?String(trades.length):"Belum ada log"],
         ["Profit factor",grossLosses>0?(grossWins/grossLosses).toFixed(2):grossWins>0?"∞":"—"],
         ["Win rate",trades.length?percent(gains.length/trades.length):"—"],
         ["Rata-rata untung",gains.length?money(grossWins/gains.length):"—"],
@@ -176,19 +186,48 @@
       $("forwardMetrics").replaceWith(safeMetricRows(forwardRows,"forwardMetrics"));
       const costText=costRatio===null?"—":percent(costRatio);
       const executionRows=[
-        ["Biaya order (fee + spread/slippage)",money(fees+spreadSlip)],
-        ["Fee tercatat",money(fees)],
-        ["Spread/slippage terestimasi dari book",money(spreadSlip)],
+        ["Biaya order (fee + spread/slippage)",completedCalls.length?money(fees+spreadSlip):"Belum ada data"],
+        ["Fee tercatat",completedCalls.length?money(fees):"Belum ada data"],
+        ["Spread/slippage terestimasi dari book",completedCalls.length?money(spreadSlip):"Belum ada data"],
         ["Porsi biaya / laba kotor",costText],
         ["Snapshot book valid",`${validSnapshots.length} / ${snapshots.length}`],
         ["Median spread terukur",percent(medianSpread)],
         ["Median slippage buy / sell @ Rp10 juta",`${percent(medianBuySlippage)} / ${percent(medianSellSlippage)}`],
         ["Buy & hold BTC/IDR",percent(benchmark)],
         ["Gap return forward − benchmark",returnTotal===null||benchmark===null?"—":percent(returnTotal-benchmark)],
-        ["Return backtest 14 hari",backtest&&backtest.forward_window?percent(backtest.forward_window.total_return):"Belum tersedia"],
-        ["Kecocokan sinyal backtest vs forward",backtest&&backtest.forward_window?percent(backtest.forward_window.signal_match_rate):"Belum tersedia"]
+        ["Return backtest 14 hari",forwardWindow?percent(forwardWindow.total_return):"Belum tersedia"],
+        ["Kecocokan sinyal backtest vs forward",forwardWindow?percent(forwardWindow.signal_match_rate):"Belum tersedia"],
+        ["Status kecocokan sinyal",signalComparison?text(signalComparison.status):"Belum dibandingkan"],
+        ["Sinyal cocok / ekspektasi",signalComparison?`${signalComparison.matched_signals} / ${signalComparison.expected_signals}`:"Belum tersedia"],
+        ["Cakupan log sinyal",signalComparison?percent(signalComparison.coverage_rate):"Belum tersedia"],
+        ["Order fill dibandingkan",forwardWindow&&forwardWindow.execution_comparison?String(forwardWindow.execution_comparison.matched_orders):"Belum dibandingkan"],
+        ["Fill tak berpasangan (backtest / forward)",forwardWindow&&forwardWindow.execution_comparison?`${forwardWindow.execution_comparison.unmatched_backtest_orders} / ${forwardWindow.execution_comparison.unmatched_forward_orders}`:"Belum dibandingkan"],
+        ["Rata-rata selisih harga fill",meanFillDifference===null?"Belum tersedia":money(meanFillDifference)],
+        ["Rata-rata delay setelah candle",meanFillDelay===null?"Belum tersedia":`${meanFillDelay.toFixed(0)} detik`]
       ];
       $("executionMetrics").replaceWith(safeMetricRows(executionRows,"executionMetrics"));
+      const fillBody=$("fillComparisonBody");
+      fillBody.replaceChildren();
+      if(!fillComparisons.length){
+        const row=document.createElement("tr"),cell=document.createElement("td");
+        cell.colSpan=13;cell.className="empty";
+        cell.textContent="Perbandingan per order belum tersedia; perlu hasil backtest dengan forward log pada jendela yang sama.";
+        row.append(cell);fillBody.append(row);
+      }
+      for(const item of fillComparisons){
+        const row=document.createElement("tr");
+        const closeTime=Number(item.candle_close_time);
+        const values=[
+          Number.isFinite(closeTime)?timeLabel(new Date(closeTime*1000).toISOString()):"—",
+          item.symbol||"—",item.side||"—",money(item.backtest_fill),money(item.forward_fill),
+          money(item.fill_difference_idr),percent(item.fill_difference_fraction),
+          money(item.backtest_fee_idr),money(item.forward_fee_idr),money(item.fee_difference_idr),
+          percent(item.forward_spread_fraction),percent(item.forward_fill_vs_signal_fraction),
+          item.delay_seconds_after_candle_close!==null&&Number.isFinite(Number(item.delay_seconds_after_candle_close))?`${Number(item.delay_seconds_after_candle_close).toFixed(0)} dtk`:"—"
+        ];
+        for(const value of values){const cell=document.createElement("td");cell.textContent=String(value);row.append(cell)}
+        fillBody.append(row);
+      }
       const body=$("eventsBody");
       body.replaceChildren();
       const rows=events.slice(0,100);

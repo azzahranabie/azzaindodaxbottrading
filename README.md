@@ -4,7 +4,7 @@ Bot long-only untuk pasangan IDR di Indodax. Bot membaca candle tertutup dan ord
 
 ## Status bahan UAS
 
-Kode tidak membuat atau mengarang hasil. Data OHLCV asli Indodax untuk lebih dari tiga tahun kini tersimpan di `data/indodax_4h_history.json`, dan tarif resmi telah dibuktikan di `fee-evidence.json`. Satu set snapshot nyata per pasangan sudah diambil pada 12 November; itu belum memenuhi kebutuhan minimal enam snapshot pada setidaknya dua hari, sehingga backtest dengan biaya terukur belum diterbitkan. Belum ada log forward test 14 hari atau bukti freeze 5 November. Metrik tanpa bukti tetap ditampilkan sebagai belum tersedia.
+Kode tidak membuat atau mengarang hasil. Data OHLCV asli Indodax untuk lebih dari tiga tahun kini tersimpan di `data/indodax_4h_history.json`, dan tarif resmi telah dibuktikan di `fee-evidence.json`. Satu set snapshot nyata per pasangan sudah diambil pada 12 November; itu belum memenuhi kebutuhan minimal enam snapshot pada setidaknya dua hari, sehingga backtest dengan biaya terukur belum diterbitkan. Pada audit 13 November, ekspor dashboard berisi nol event dan `FORWARD_START_AT` belum diisi. Deployment Vercel belum terbukti; run GitHub Actions yang diperiksa gagal karena repository secret `CRON_SECRET` dan variable `VERCEL_DEPLOYMENT_URL` belum dikonfigurasi. Belum ada log forward test 14 hari atau bukti freeze 5 November. Metrik tanpa bukti tetap ditampilkan sebagai belum tersedia.
 
 ## Strategi yang dikodekan
 
@@ -89,6 +89,10 @@ Simpan hasil JSON hitung ulang bersama file ekspor sebagai bukti audit; timestam
 
 Metrik hanya dapat dinilai setelah log nyata tersedia. Backtest wajib memakai candle historis Indodax minimal tiga tahun dan biaya/spread/slippage yang benar-benar diukur dari snapshot; backtest selama jendela 14 hari yang sama juga harus menunjukkan kecocokan sinyal candle demi candle. Benchmark adalah buy-and-hold BTC/IDR pada jendela yang sama. Jangan mengisi `crypto_bot/backtest_result.json` dengan angka manual atau data simulasi.
 
+## Refleksi (status)
+
+Refleksi kuantitatif belum dapat disimpulkan sebelum forward log lengkap dan backtest jendela yang sama tersedia. Saat tersedia, bandingkan sinyal per candle terlebih dahulu; lalu jelaskan setiap selisih fill memakai fee, spread, slippage terhadap harga sinyal, serta waktu eksekusi setelah candle tutup. Hasil tanpa log atau dengan cakupan sinyal parsial harus dilaporkan sebagai belum lengkap, bukan sebagai kecocokan penuh.
+
 ## Berkas utama
 
 - `crypto_bot/strategy.py` — aturan sinyal yang dipakai bot.
@@ -100,7 +104,7 @@ Metrik hanya dapat dinilai setelah log nyata tersedia. Backtest wajib memakai ca
 - `static/index.html` — dashboard live dan HTML offline mandiri.
 - `hitung_ulang.py` — hitung ulang metrik forward/operasional dari ekspor JSON.
 - `collect_indodax_history.py` — unduh OHLCV 4 jam asli Indodax dengan rate limit.
-- `run_indodax_backtest.py` — jalankan strategi bersama dengan biaya median dari snapshot yang diukur.
+- `run_indodax_backtest.py` — jalankan strategi bersama dengan biaya median dari snapshot yang diukur; opsi `--forward-log indodax-dry-run-log.json` membandingkan sinyal per candle serta fill per order pada jendela forward yang sama.
 - `fee-evidence.json` — tarif taker resmi per sisi dan perbandingan API publik, diakses 12 November 2026.
 - `CHANGELOG.md` — catatan perbaikan pasca-freeze untuk audit forward test.
 - `api/index.py`, `vercel.json`, `.github/workflows/` — deploy, scheduler tick, dan pengambilan snapshot.
