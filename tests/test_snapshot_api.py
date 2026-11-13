@@ -66,6 +66,33 @@ class SnapshotEndpointTests(unittest.TestCase):
                 )
         self.assertEqual(response.status_code, 400)
 
+    def test_dashboard_returns_signal_log_without_forward_window(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = LocalStore(os.path.join(directory, "state.json"))
+            signal_event = {
+                "type": "call",
+                "status": "processed",
+                "symbol": "BTCIDR",
+                "signal": "hold",
+                "candle_time": 1_800_000_000,
+                "signal_price": 100_000_000,
+                "entry_level": 101_000_000,
+                "exit_level": 99_000_000,
+                "sma": 100_500_000,
+            }
+            store.append_event(signal_event)
+            main.app.state.store = store
+
+            with patch.dict(os.environ, {"FORWARD_START_AT": ""}):
+                with TestClient(main.app) as client:
+                    response = client.get("/api/dashboard")
+
+            self.assertEqual(response.status_code, 200)
+            payload = response.json()
+            self.assertIsNone(payload["forward_start_at"])
+            self.assertEqual(payload["timeframe_seconds"], 4 * 60 * 60)
+            self.assertEqual(payload["events"], [signal_event])
+
 
 if __name__ == "__main__":
     unittest.main()

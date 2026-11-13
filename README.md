@@ -4,7 +4,7 @@ Bot long-only untuk pasangan IDR di Indodax. Bot membaca candle tertutup dan ord
 
 ## Status bahan UAS
 
-Kode tidak membuat atau mengarang hasil. Data OHLCV asli Indodax untuk lebih dari tiga tahun kini tersimpan di `data/indodax_4h_history.json`, dan tarif resmi telah dibuktikan di `fee-evidence.json`. Satu set snapshot nyata per pasangan sudah diambil pada 12 November; itu belum memenuhi kebutuhan minimal enam snapshot pada setidaknya dua hari, sehingga backtest dengan biaya terukur belum diterbitkan. Pada audit 13 November, ekspor dashboard berisi nol event dan `FORWARD_START_AT` belum diisi. Deployment Vercel belum terbukti; run GitHub Actions yang diperiksa gagal karena repository secret `CRON_SECRET` dan variable `VERCEL_DEPLOYMENT_URL` belum dikonfigurasi. Belum ada log forward test 14 hari atau bukti freeze 5 November. Metrik tanpa bukti tetap ditampilkan sebagai belum tersedia.
+Kode tidak membuat atau mengarang hasil. Data OHLCV asli Indodax untuk lebih dari tiga tahun kini tersimpan di `data/indodax_4h_history.json`, dan tarif resmi telah dibuktikan di `fee-evidence.json`. Satu snapshot nyata per pasangan dari 12 November belum memenuhi kebutuhan minimal enam snapshot pada sedikitnya dua hari, sehingga backtest berbiaya terukur belum dapat diterbitkan. Pada 14 November, satu pemanggilan dry-run manual dengan API publik mencatat sinyal BTCIDR SELL, ETHIDR SELL, dan XRPIDR HOLD ke state lokal `.bot_data.json`; log itu hanya pilot lokal, bukan forward test 14 hari. Ekspor lama `indodax-dry-run-log.json` tetap kosong. Status Vercel melaporkan deployment commit `bbefbed` selesai, tetapi URL deployment yang diuji meminta login Vercel, sehingga akses publik dan API produksi belum terverifikasi. Run GitHub Actions tick terakhir gagal sebelum menghubungi aplikasi karena secret `CRON_SECRET` dan variable `VERCEL_DEPLOYMENT_URL` kosong; konfigurasi Upstash/Vercel dan `FORWARD_START_AT` produksi belum dapat diperiksa. Belum ada forward test 14 hari atau bukti freeze 5 November. Metrik tanpa bukti tetap ditampilkan sebagai belum tersedia.
 
 ## Strategi yang dikodekan
 
@@ -42,6 +42,8 @@ py -m pip install -r requirements-dev.txt
 py -m unittest discover -s tests -v
 ```
 
+Workflow `.github/workflows/tests.yml` menjalankan suite yang sama pada Python 3.12 untuk setiap push dan pull request; runtime lokal/Vercel dipatok ke Python 3.12 di `.python-version`.
+
 Buka `http://127.0.0.1:8000`. Endpoint:
 
 Jangan buka `static/index.html` atau `Azza Dashboard Trading.backup.html` memakai preview HTML VS Code untuk data live; preview dapat memblokir endpoint API dengan 403. Jalankan server di atas dan buka `http://127.0.0.1:8000/`. File HTML tetap bisa dibuka langsung untuk mengimpor log secara offline.
@@ -56,7 +58,7 @@ Penyimpanan lokal menggunakan `.bot_data.json`. File ini diabaikan Git. Data lok
 
 ## Deploy ke Vercel dan penjadwal 4 jam
 
-`api/index.py` mengekspos FastAPI dan `vercel.json` mengarahkan request ke aplikasi. Pasang environment variables berikut di Vercel:
+`api/index.py` mengekspos FastAPI dan `vercel.json` mengarahkan request ke aplikasi. Vercel menggunakan runtime Python 3.12 yang dipatok di `.python-version`. Pasang environment variables berikut di Vercel:
 
 - `CRON_SECRET` — secret kuat dan sama dengan GitHub Actions secret.
 - `UPSTASH_REDIS_REST_URL` dan `UPSTASH_REDIS_REST_TOKEN` — Upstash Redis REST untuk state, lock, dan log persisten.
@@ -70,7 +72,7 @@ Jangan commit `.env`, token Upstash, secret scheduler, atau file state. `.env.ex
 
 ## Log, dashboard, dan hitung ulang
 
-Log setiap candle yang diproses memuat sinyal, alasan, waktu, bid/ask, dan snapshot penuh order book; catatan order memuat kuantitas, harga fill rata-rata, fee, serta selisih terhadap harga sinyal. Panggilan terjadwal, penolakan data, error Indodax, perubahan kill switch, dan equity harian ikut dicatat. Workflow `.github/workflows/snapshot.yml` mengambil snapshot order book mentah tiga kali sehari melalui endpoint terlindungi `/api/snapshot`, untuk ukuran order Rp10.000.000. Setelah mendapat minimal enam sampel pada sedikitnya dua hari per pasangan, ekspor JSON dashboard, simpan snapshot ke `data/orderbook_snapshots.json`, dan jalankan backtest:
+Log setiap candle yang diproses memuat sinyal, alasan, waktu, bid/ask, dan snapshot penuh order book; catatan order memuat kuantitas, harga fill rata-rata, fee, serta selisih terhadap harga sinyal. Panel “Log sinyal aktual” menampilkan semua event sinyal tersimpan (maksimum 10.000 event sesuai batas storage), termasuk waktu penutupan candle, harga, Donchian entry/exit, dan SMA. Panel tersebut tidak disaring berdasarkan usia forward test; periode 14 hari hanya syarat evaluasi final, bukan syarat mencatat atau melihat sinyal. Dashboard juga membedakan tidak adanya log dari sinyal HOLD dan menampilkan waktu pembaruan API beserta waktu candle terakhir. Return dan drawdown forward baru ditampilkan setelah `FORWARD_START_AT` disetel; durasi yang kurang dari 14 hari tetap pilot, bukan hasil final. Panggilan terjadwal, penolakan data, error Indodax, perubahan kill switch, dan equity harian ikut dicatat. Workflow `.github/workflows/snapshot.yml` mengambil snapshot order book mentah tiga kali sehari melalui endpoint terlindungi `/api/snapshot`, untuk ukuran order Rp10.000.000. Setelah mendapat minimal enam sampel pada sedikitnya dua hari per pasangan, ekspor JSON dashboard, simpan snapshot ke `data/orderbook_snapshots.json`, dan jalankan backtest:
 
 ```powershell
 py collect_indodax_history.py --start 2023-11-12T00:00:00Z --output data/indodax_4h_history.json

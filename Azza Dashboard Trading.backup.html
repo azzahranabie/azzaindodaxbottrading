@@ -13,6 +13,7 @@
     main{padding:18px 0 40px}.toolbar{margin-bottom:14px}.actions{justify-content:flex-end}.btn{border:1px solid #3b506f;border-radius:7px;padding:8px 11px;background:var(--panel2);color:var(--text);font:inherit;font-weight:650;cursor:pointer}.btn:hover{border-color:var(--gold)}.btn:disabled{opacity:.5;cursor:not-allowed}.file-label{display:inline-flex;align-items:center;gap:8px}.file-label input{position:absolute;width:1px;height:1px;opacity:0}
     .notice{border:1px solid #705f37;background:#2c271b;color:#f0d992;border-radius:8px;padding:11px 13px;margin:0 0 14px}.notice.error{border-color:#713b43;background:#2b1d25;color:#ffb5b5}.notice.ok{border-color:#315f49;background:#172b25;color:#a6e7c1}.notice a{color:inherit;font-weight:700}
     .test-note{border-left:3px solid var(--gold);padding:8px 12px;margin:0 0 14px;background:#111c2e;color:var(--muted);font-size:12px}
+    .signal-buy{color:var(--green);font-weight:750}.signal-sell{color:var(--red);font-weight:750}.signal-hold{color:var(--gold);font-weight:750}
     .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}.card,.panel{background:linear-gradient(145deg,#142137,#101a2b);border:1px solid var(--line);border-radius:10px}.card{padding:13px 15px;min-height:102px}.label{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700}.value{font-size:22px;font-weight:750;margin:4px 0 0;overflow-wrap:anywhere}.detail{font-size:11px;color:var(--muted);margin-top:3px}.positive{color:var(--green)}.negative{color:var(--red)}.neutral{color:var(--gold)}
     .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}.panel{overflow:hidden}.panelhead{padding:12px 15px;border-bottom:1px solid var(--line)}.panelhead h2{font-size:15px;margin:0}.panelbody{padding:13px 15px}.metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px}.metric{border-bottom:1px solid #24344c;padding:5px 0 8px;display:flex;justify-content:space-between;gap:12px}.metric span:first-child{color:var(--muted)}.metric strong{text-align:right;font-variant-numeric:tabular-nums}.wide{margin-bottom:14px}
     .tablewrap{overflow:auto;max-height:460px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:9px 11px;border-bottom:1px solid #22314a;vertical-align:top}th{position:sticky;top:0;background:#17243a;color:#aebdd2;font-size:10px;letter-spacing:.45px;text-transform:uppercase;z-index:1}td{max-width:330px;overflow-wrap:anywhere}.pill{display:inline-block;padding:2px 7px;border:1px solid var(--line);border-radius:99px;color:var(--blue);font-size:10px;white-space:nowrap}.empty{text-align:center;color:var(--muted);padding:24px}
@@ -50,6 +51,7 @@
     <section class="panel wide"><div class="panelhead"><h2>Eksekusi, biaya, dan benchmark</h2><small>Cost ratio memakai fee dan selisih fill terhadap mid-price dari order book</small></div><div class="panelbody"><div id="executionMetrics" class="metrics"></div></div></section>
     <section class="panel wide"><div class="panelhead"><h2>Perbandingan fill per order: backtest vs forward</h2><small>Selisih dipasangkan per pasangan, sisi, dan candle; fee, spread, slippage, serta delay ditampilkan terpisah</small></div><div class="tablewrap"><table><thead><tr><th>Penutupan candle</th><th>Pasangan</th><th>Sisi</th><th>Fill backtest</th><th>Fill forward</th><th>Selisih fill/unit (Rp)</th><th>Selisih %</th><th>Fee backtest</th><th>Fee forward</th><th>Selisih fee</th><th>Spread forward</th><th>Slippage vs sinyal</th><th>Delay</th></tr></thead><tbody id="fillComparisonBody"><tr><td class="empty" colspan="13">Belum ada hasil perbandingan.</td></tr></tbody></table></div></section>
     <section class="panel wide"><div class="panelhead"><h2>Kill switch</h2><div class="kill"><strong id="killStatus">Belum diketahui</strong><button class="btn" id="killButton" type="button" disabled>Ubah status</button></div></div><div class="panelbody"><span class="secret-help">Perubahan memerlukan CRON_SECRET dan dicatat ke log. Secret hanya diminta sementara di browser.</span></div></section>
+    <section class="panel wide"><div class="panelhead"><h2>Log sinyal aktual</h2><small id="signalCount">0 sinyal</small></div><div class="panelbody"><p id="signalStatus" class="test-note" role="status">Log sinyal aktual ditampilkan tanpa menunggu periode forward 14 hari.</p><div class="tablewrap"><table><thead><tr><th>Waktu diproses</th><th>Penutupan candle</th><th>Pasangan</th><th>Sinyal</th><th>Harga candle</th><th>Donchian entry</th><th>Donchian exit</th><th>SMA 150</th><th>Alasan / eksekusi</th></tr></thead><tbody id="signalsBody"><tr><td class="empty" colspan="9">Belum ada log sinyal yang dimuat.</td></tr></tbody></table></div></div></section>
     <section class="panel wide"><div class="panelhead"><h2>Log keputusan terbaru</h2><small id="logCount">0 baris</small></div><div class="tablewrap"><table><thead><tr><th>Waktu</th><th>Pasangan</th><th>Sinyal/status</th><th>Alasan / error</th><th>Order</th></tr></thead><tbody id="eventsBody"><tr><td class="empty" colspan="5">Belum ada log yang dimuat.</td></tr></tbody></table></div></section>
   </main>
   <footer class="wrap footer">Data aktual Indodax publik. Sinyal bukan rekomendasi; semua transaksi di halaman ini hanya simulasi. File HTML ini dapat dibuka offline dan diberi makan file hasil “Unduh log JSON”.</footer>
@@ -99,10 +101,12 @@
     function report(payload, source) {
       currentPayload=payload;
       const events=Array.isArray(payload.events)?payload.events:[];
+      const signalEvents=events.filter(event=>event&&event.status==="processed"&&["buy","sell","hold"].includes(event.signal)&&event.candle_time!==undefined&&event.candle_time!==null);
       const state=payload.state || {};
       const completedCalls=events.filter(event=>event.type==="call"&&!event.symbol&&["complete","error","kill_switch"].includes(event.status));
       const scheduledCalls=new Set(completedCalls.map(event=>new Date(event.scheduled_time||event.time).getTime()).filter(Number.isFinite));
       const start=Date.parse(payload.forward_start_at||"");
+      const timeframeSeconds=Number(payload.timeframe_seconds||Number(payload.schedule_interval_hours||4)*3600);
       const capturedAt=Date.parse(payload.generated_at||"");
       const now=Number.isFinite(capturedAt)?capturedAt:Date.now();
       const planned=Number.isFinite(start)?expectedSchedule(start,now,Number(payload.schedule_interval_hours||4)):null;
@@ -117,8 +121,9 @@
       const endEquity=lastCall?Number(lastCall.equity_idr):null;
       const curve=[initial,...equityPoints];
       if(endEquity!==null) curve.push(endEquity);
-      const drawdown=equityPoints.length||endEquity!==null?maxDrawdown(curve):null;
-      const returnTotal=endEquity===null||initial<=0?null:endEquity/initial-1;
+      const forwardWindowStarted=Number.isFinite(start);
+      const drawdown=forwardWindowStarted&&(equityPoints.length||endEquity!==null)?maxDrawdown(curve):null;
+      const returnTotal=!forwardWindowStarted||endEquity===null||initial<=0?null:endEquity/initial-1;
       const trades=Array.isArray(state.closed_trades)?state.closed_trades:[];
       const gains=trades.map(item=>Number(item.net_pnl)).filter(value=>value>0);
       const losses=trades.map(item=>Number(item.net_pnl)).filter(value=>value<0);
@@ -139,11 +144,11 @@
       const medianSpread=median(validSnapshots.map(item=>Number(item.spread_fraction)));
       const medianBuySlippage=median(validSnapshots.map(item=>Number(item.buy_slippage_fraction)));
       const medianSellSlippage=median(validSnapshots.map(item=>Number(item.sell_slippage_fraction)));
-      const symbols=events.filter(event=>event.symbol&&Number.isFinite(Number(event.signal_price))&&["hold","buy","sell"].includes(event.signal));
+      const symbols=forwardWindowStarted?events.filter(event=>event.symbol&&Number.isFinite(Number(event.signal_price))&&Number.isFinite(Number(event.candle_time))&&(Number(event.candle_time)+timeframeSeconds)*1000>=start&&(Number(event.candle_time)+timeframeSeconds)*1000<=now&&["hold","buy","sell"].includes(event.signal)):[];
       const btc=symbols.filter(event=>event.symbol==="BTCIDR").sort((a,b)=>Number(a.candle_time)-Number(b.candle_time));
       const benchmark=btc.length>1&&Number(btc[0].signal_price)>0?Number(btc[btc.length-1].signal_price)/Number(btc[0].signal_price)-1:null;
-      setValue("returnValue",percent(returnTotal),returnTotal>0?"positive":returnTotal<0?"negative":"neutral");
-      setValue("drawdownValue",percent(drawdown),drawdown>0?"negative":"neutral");
+      setValue("returnValue",forwardWindowStarted?percent(returnTotal):"Belum dimulai",returnTotal>0?"positive":returnTotal<0?"negative":"neutral");
+      setValue("drawdownValue",forwardWindowStarted?percent(drawdown):"Belum dimulai",drawdown>0?"negative":"neutral");
       setValue("uptimeValue",planned===null?"—":`${completedSlots} / ${planned}`);
       $("uptimeDetail").textContent=planned?`Uptime ${percent(completedSlots/planned)} · jadwal 4 jam UTC`:"Jadwal belum dikonfigurasi";
       setValue("tradeCount",completedCalls.length?String(orders.length):"—");
@@ -175,8 +180,8 @@
       $("backtestMetrics").replaceWith(safeMetricRows(backtestRows,"backtestMetrics"));
       const forwardRows=[
         ["Ekuitas terakhir",endEquity===null?"Belum ada":money(endEquity)],
-        ["Return total",percent(returnTotal)],
-        ["Maximum drawdown",percent(drawdown)],
+        ["Return total",forwardWindowStarted?percent(returnTotal):"Belum dimulai"],
+        ["Maximum drawdown",forwardWindowStarted?percent(drawdown):"Belum dimulai"],
         ["Jumlah trade selesai",completedCalls.length?String(trades.length):"Belum ada log"],
         ["Profit factor",grossLosses>0?(grossWins/grossLosses).toFixed(2):grossWins>0?"∞":"—"],
         ["Win rate",trades.length?percent(gains.length/trades.length):"—"],
@@ -242,8 +247,54 @@
         }
         body.append(tr);
       }
+      const signalBody=$("signalsBody");
+      signalBody.replaceChildren();
+      const orderedSignals=[...signalEvents].sort((a,b)=>Number(b.candle_time)-Number(a.candle_time));
+      $("signalCount").textContent=`${orderedSignals.length} sinyal aktual`;
+      if(!orderedSignals.length){
+        const row=document.createElement("tr"),cell=document.createElement("td");
+        cell.colSpan=9;cell.className="empty";
+        cell.textContent=events.length
+          ?"Belum ada candle yang berhasil diproses sebagai sinyal. Ini bukan sinyal HOLD; periksa status tick dan penolakan data pada log keputusan."
+          :"Belum ada log sinyal aktual. Ini bukan sinyal HOLD; pastikan scheduler berhasil memanggil bot dan storage persisten tersedia.";
+        row.append(cell);signalBody.append(row);
+        $("signalStatus").textContent=Number.isFinite(start)
+          ?"Log sinyal tetap bebas dari batas 14 hari, tetapi saat ini belum ada sinyal terproses. Periksa log tick dan status kelengkapan data."
+          :"Belum ada sinyal terproses. Periode forward belum dikonfigurasi; ketiadaan log tidak berarti HOLD.";
+      }else{
+        const latest=orderedSignals[0];
+        const latestClose=Number(latest.candle_time)+timeframeSeconds;
+        const elapsedDays=Number.isFinite(start)?Math.max(0,(now-start)/86400000):null;
+        $("signalStatus").textContent=`Menampilkan semua ${orderedSignals.length} sinyal aktual yang tersimpan (tanpa filter 14 hari). Candle sinyal terbaru: ${timeLabel(new Date(latestClose*1000).toISOString())} WIB.${Number.isFinite(elapsedDays)?` Periode forward tercatat ${elapsedDays.toFixed(1)} / 14 hari; durasi saja belum membuktikan kelengkapan.`:" Periode forward belum dikonfigurasi."}`;
+        for(const item of orderedSignals){
+          const row=document.createElement("tr");
+          const candleClose=Number(item.candle_time)+timeframeSeconds;
+          const orderText=Array.isArray(item.orders)&&item.orders.length
+            ?item.orders.map(order=>`${String(order.side||"").toUpperCase()} ${Number(order.quantity).toPrecision(6)} @ ${money(order.average_fill)} (fee ${money(order.fee_idr)})`).join("; ")
+            :"Tidak ada order";
+          const values=[
+            timeLabel(item.time),
+            Number.isFinite(candleClose)?timeLabel(new Date(candleClose*1000).toISOString()):"—",
+            text(item.symbol),
+            String(item.signal).toUpperCase(),
+            money(item.signal_price),
+            money(item.entry_level),
+            money(item.exit_level),
+            money(item.sma),
+            `${text(item.reason)} · ${orderText}`
+          ];
+          values.forEach((value,index)=>{
+            const cell=document.createElement("td");
+            cell.textContent=String(value);
+            if(index===3)cell.className=`signal-${item.signal}`;
+            row.append(cell);
+          });
+          signalBody.append(row);
+        }
+      }
       $("sourceLabel").textContent=source==="live"?"Data live dari API dashboard":"Data lokal dari file log";
-      $("updatedLabel").textContent=`Dibaca ${new Date().toLocaleString("id-ID",{timeZone:"Asia/Jakarta"})}`;
+      const sourceTimestamp=Date.parse(payload.generated_at||"");
+      $("updatedLabel").textContent=`${source==="live"?"API diperbarui":"Ekspor dibuat"} ${Number.isFinite(sourceTimestamp)?timeLabel(new Date(sourceTimestamp).toISOString())+" WIB":"—"} · dibaca ${new Date().toLocaleString("id-ID",{timeZone:"Asia/Jakarta"})} WIB`;
       $("exportButton").disabled=false;
       const notice=$("notice");
       notice.className="notice "+(events.length?"ok":"");

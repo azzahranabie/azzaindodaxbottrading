@@ -271,6 +271,7 @@ def dashboard_data():
         "backtest": backtest,
         "initial_cash": SETTINGS.starting_cash,
         "forward_start_at": os.getenv("FORWARD_START_AT") or None,
+        "timeframe_seconds": SETTINGS.timeframe_seconds,
         "schedule_interval_hours": SETTINGS.timeframe_seconds // 3600,
         "state": state,
         "events": events,
