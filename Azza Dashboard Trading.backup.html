@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111827">
+  <title>Azza Trading Bot — Dry Run Indodax</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0b1220;--panel:#111c2e;--panel2:#17243a;--line:#263650;--text:#e7edf7;--muted:#91a1b9;--gold:#e5bc69;--green:#57c58a;--red:#f07878;--blue:#8bb8ff}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 70% -15%,#1d3151 0,transparent 45%),var(--bg);color:var(--text);font:14px/1.5 "Segoe UI",system-ui,sans-serif}
+    .wrap{width:min(1200px,calc(100% - 32px));margin:auto}.mast{padding:24px 0 18px;border-bottom:1px solid var(--line)}.mastrow,.toolbar,.panelhead,.actions{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    h1{font-size:25px;line-height:1.2;margin:0}.subtitle,.muted,small{color:var(--muted)}.subtitle{margin:6px 0 0}.badge{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:99px;padding:5px 10px;color:var(--gold);font-size:12px;font-weight:700}.dot{width:7px;height:7px;border-radius:50%;background:var(--gold)}
+    main{padding:18px 0 40px}.toolbar{margin-bottom:14px}.actions{justify-content:flex-end}.btn{border:1px solid #3b506f;border-radius:7px;padding:8px 11px;background:var(--panel2);color:var(--text);font:inherit;font-weight:650;cursor:pointer}.btn:hover{border-color:var(--gold)}.btn:disabled{opacity:.5;cursor:not-allowed}.file-label{display:inline-flex;align-items:center;gap:8px}.file-label input{position:absolute;width:1px;height:1px;opacity:0}
+    .notice{border:1px solid #705f37;background:#2c271b;color:#f0d992;border-radius:8px;padding:11px 13px;margin:0 0 14px}.notice.error{border-color:#713b43;background:#2b1d25;color:#ffb5b5}.notice.ok{border-color:#315f49;background:#172b25;color:#a6e7c1}.notice a{color:inherit;font-weight:700}
+    .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}.card,.panel{background:linear-gradient(145deg,#142137,#101a2b);border:1px solid var(--line);border-radius:10px}.card{padding:13px 15px;min-height:102px}.label{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700}.value{font-size:22px;font-weight:750;margin:4px 0 0;overflow-wrap:anywhere}.detail{font-size:11px;color:var(--muted);margin-top:3px}.positive{color:var(--green)}.negative{color:var(--red)}.neutral{color:var(--gold)}
+    .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}.panel{overflow:hidden}.panelhead{padding:12px 15px;border-bottom:1px solid var(--line)}.panelhead h2{font-size:15px;margin:0}.panelbody{padding:13px 15px}.metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px}.metric{border-bottom:1px solid #24344c;padding:5px 0 8px;display:flex;justify-content:space-between;gap:12px}.metric span:first-child{color:var(--muted)}.metric strong{text-align:right;font-variant-numeric:tabular-nums}.wide{margin-bottom:14px}
+    .tablewrap{overflow:auto;max-height:460px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:9px 11px;border-bottom:1px solid #22314a;vertical-align:top}th{position:sticky;top:0;background:#17243a;color:#aebdd2;font-size:10px;letter-spacing:.45px;text-transform:uppercase;z-index:1}td{max-width:330px;overflow-wrap:anywhere}.pill{display:inline-block;padding:2px 7px;border:1px solid var(--line);border-radius:99px;color:var(--blue);font-size:10px;white-space:nowrap}.empty{text-align:center;color:var(--muted);padding:24px}
+    .kill{display:flex;align-items:center;gap:9px}.kill strong{font-size:12px}.footer{border-top:1px solid var(--line);padding:14px 0 25px;color:var(--muted);font-size:11px}.secret-help{font-size:11px;color:var(--muted)}
+    @media(max-width:850px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cols{grid-template-columns:1fr}}@media(max-width:520px){.wrap{width:calc(100% - 20px)}.mast{padding:18px 0 14px}h1{font-size:21px}.grid{gap:7px}.card{padding:10px;min-height:92px}.value{font-size:18px}.metrics{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <header class="mast"><div class="wrap mastrow">
+    <div><h1>Azza Trading Bot</h1><p class="subtitle">Indodax · simulasi dry-run · long-only · tanpa API key</p></div>
+    <span class="badge"><span class="dot"></span>DRY RUN — order tidak dikirim ke bursa</span>
+  </div></header>
+  <main class="wrap">
+    <div class="toolbar">
+      <div><strong id="sourceLabel">Menunggu data</strong><div class="muted" id="updatedLabel">Belum dimuat</div></div>
+      <div class="actions">
+        <button class="btn" id="refreshButton" type="button">Muat ulang</button>
+        <button class="btn" id="exportButton" type="button" disabled>Unduh log JSON</button>
+        <label class="btn file-label">Buka log offline<input id="importFile" type="file" accept=".json,application/json"></label>
+      </div>
+    </div>
+    <div id="notice" class="notice" role="status">Dashboard membaca log aktual; metrik yang tidak didukung data akan ditandai belum tersedia.</div>
+    <div id="serverHint" class="notice" hidden>Untuk memuat data live, jalankan <code>uvicorn main:app --reload</code> dari folder proyek, lalu buka <a href="http://127.0.0.1:8000/">http://127.0.0.1:8000/</a>.</div>
+    <section class="grid" aria-label="Ringkasan forward test">
+      <article class="card"><div class="label">Return forward test</div><div class="value" id="returnValue">—</div><div class="detail">Modal awal virtual Rp100.000.000</div></article>
+      <article class="card"><div class="label">Maximum drawdown</div><div class="value" id="drawdownValue">—</div><div class="detail">Ekuitas awal, snapshot harian, dan ekuitas terakhir</div></article>
+      <article class="card"><div class="label">Panggilan / terjadwal</div><div class="value" id="uptimeValue">—</div><div class="detail" id="uptimeDetail">Jadwal 4 jam, slot UTC</div></article>
+      <article class="card"><div class="label">Order simulasi selesai</div><div class="value" id="tradeCount">—</div><div class="detail" id="errorDetail">Error API: — · kill switch: —</div></article>
+    </section>
+    <section class="cols">
+      <article class="panel"><div class="panelhead"><h2>Backtest Indodax</h2><span class="pill" id="backtestStatus">Belum tersedia</span></div><div class="panelbody"><div id="backtestMetrics" class="metrics"></div></div></article>
+      <article class="panel"><div class="panelhead"><h2>Forward test</h2><span class="pill">tanpa CAGR 14 hari</span></div><div class="panelbody"><div id="forwardMetrics" class="metrics"></div></div></article>
+    </section>
+    <section class="panel wide"><div class="panelhead"><h2>Eksekusi, biaya, dan benchmark</h2><small>Cost ratio memakai fee dan selisih fill terhadap mid-price dari order book</small></div><div class="panelbody"><div id="executionMetrics" class="metrics"></div></div></section>
+    <section class="panel wide"><div class="panelhead"><h2>Kill switch</h2><div class="kill"><strong id="killStatus">Belum diketahui</strong><button class="btn" id="killButton" type="button" disabled>Ubah status</button></div></div><div class="panelbody"><span class="secret-help">Perubahan memerlukan CRON_SECRET dan dicatat ke log. Secret hanya diminta sementara di browser.</span></div></section>
+    <section class="panel wide"><div class="panelhead"><h2>Log keputusan terbaru</h2><small id="logCount">0 baris</small></div><div class="tablewrap"><table><thead><tr><th>Waktu</th><th>Pasangan</th><th>Sinyal/status</th><th>Alasan / error</th><th>Order</th></tr></thead><tbody id="eventsBody"><tr><td class="empty" colspan="5">Belum ada log yang dimuat.</td></tr></tbody></table></div></section>
+  </main>
+  <footer class="wrap footer">Data aktual Indodax publik. Sinyal bukan rekomendasi; semua transaksi di halaman ini hanya simulasi. File HTML ini dapat dibuka offline dan diberi makan file hasil “Unduh log JSON”.</footer>
+  <script>
+    const $ = id => document.getElementById(id);
+    let currentPayload = null;
+    const money = value => value!==null&&value!==undefined&&Number.isFinite(Number(value)) ? "Rp" + new Intl.NumberFormat("id-ID", {maximumFractionDigits:0}).format(Number(value)) : "—";
+    const percent = value => value!==null&&value!==undefined&&Number.isFinite(Number(value)) ? (Number(value) * 100).toLocaleString("id-ID", {maximumFractionDigits:2}) + "%" : "—";
+    const timeLabel = value => { const date = new Date(value); return Number.isNaN(date.getTime()) ? String(value || "—") : date.toLocaleString("id-ID", {timeZone:"Asia/Jakarta"}); };
+    const text = (value, fallback="—") => value === undefined || value === null || value === "" ? fallback : String(value);
+    const setValue = (id, value, className) => { const node=$(id); node.textContent=value; node.className="value"+(className ? " "+className : ""); };
+    function safeMetricRows(rows, id) {
+      const box = document.createElement("div");
+      box.className = "metrics";
+      box.id = id;
+      for (const [label, value] of rows) {
+        const row = document.createElement("div");
+        row.className = "metric";
+        const name = document.createElement("span");
+        const result = document.createElement("strong");
+        name.textContent = label;
+        result.textContent = value;
+        row.append(name, result);
+        box.append(row);
+      }
+      return box;
+    }
+    function maxDrawdown(values) {
+      if (!values.length) return null;
+      let peak=values[0], drawdown=0;
+      for (const value of values) {
+        if (value > peak) peak=value;
+        if (peak > 0) drawdown=Math.max(drawdown,(peak-value)/peak);
+      }
+      return drawdown;
+    }
+    function median(values) {
+      const sorted=values.filter(value=>Number.isFinite(value)).sort((a,b)=>a-b);
+      if(!sorted.length)return null;
+      const middle=Math.floor(sorted.length/2);
+      return sorted.length%2?sorted[middle]:(sorted[middle-1]+sorted[middle])/2;
+    }
+    function expectedSchedule(start, now, hours) {
+      const step=Number(hours)*3600000, first=Math.ceil(start/step)*step;
+      return first > now ? 0 : Math.floor((now-first)/step)+1;
+    }
+    function report(payload, source) {
+      currentPayload=payload;
+      const events=Array.isArray(payload.events)?payload.events:[];
+      const state=payload.state || {};
+      const completedCalls=events.filter(event=>event.type==="call"&&!event.symbol&&["complete","error","kill_switch"].includes(event.status));
+      const scheduledCalls=new Set(completedCalls.map(event=>new Date(event.scheduled_time||event.time).getTime()).filter(Number.isFinite));
+      const start=Date.parse(payload.forward_start_at||"");
+      const capturedAt=Date.parse(payload.generated_at||"");
+      const now=Number.isFinite(capturedAt)?capturedAt:Date.now();
+      const planned=Number.isFinite(start)?expectedSchedule(start,now,Number(payload.schedule_interval_hours||4)):null;
+      const completedSlots=[...scheduledCalls].filter(slot=>!Number.isFinite(start)||slot>=start).length;
+      const errorCount=completedCalls.reduce((total,event)=>total+Math.max(Array.isArray(event.errors)?event.errors.length:0,event.status==="error"?1:0),0);
+      const killCount=events.filter(event=>event.type==="kill_switch"||(event.type==="call"&&event.status==="kill_switch")).length;
+      const initial=Number(payload.initial_cash||state.initial_cash||100000000);
+      const equityPoints=(Array.isArray(state.daily_equity)?state.daily_equity:[]).map(item=>Number(item.equity)).filter(Number.isFinite);
+      const lastCall=completedCalls
+        .filter(event=>event.status==="complete"&&Number.isFinite(Number(event.equity_idr)))
+        .sort((a,b)=>Date.parse(b.time)-Date.parse(a.time))[0];
+      const endEquity=lastCall?Number(lastCall.equity_idr):null;
+      const curve=[initial,...equityPoints];
+      if(endEquity!==null) curve.push(endEquity);
+      const drawdown=equityPoints.length||endEquity!==null?maxDrawdown(curve):null;
+      const returnTotal=endEquity===null||initial<=0?null:endEquity/initial-1;
+      const trades=Array.isArray(state.closed_trades)?state.closed_trades:[];
+      const gains=trades.map(item=>Number(item.net_pnl)).filter(value=>value>0);
+      const losses=trades.map(item=>Number(item.net_pnl)).filter(value=>value<0);
+      const grossWins=gains.reduce((sum,value)=>sum+value,0);
+      const grossLosses=Math.abs(losses.reduce((sum,value)=>sum+value,0));
+      const orders=events.flatMap(event=>Array.isArray(event.orders)?event.orders:[]);
+      const fees=orders.reduce((sum,order)=>sum+Number(order.fee_idr||0),0);
+      const spreadSlip=orders.reduce((sum,order)=>{
+        const midpoint=(Number(order.best_bid)+Number(order.best_ask))/2;
+        if(!Number.isFinite(midpoint)||!Number.isFinite(Number(order.average_fill))) return sum;
+        const perUnit=order.side==="buy"?Number(order.average_fill)-midpoint:midpoint-Number(order.average_fill);
+        return sum+Math.max(0,perUnit)*Number(order.quantity||0);
+      },0);
+      const grossProfit=trades.reduce((sum,trade)=>sum+Math.max(0,Number(trade.net_pnl||0)+Number(trade.entry_fee||0)+Number(trade.exit_fee||0)),0);
+      const costRatio=grossProfit>0?(fees+spreadSlip)/grossProfit:null;
+      const snapshots=Array.isArray(payload.snapshots)?payload.snapshots:[];
+      const validSnapshots=snapshots.filter(item=>item.status==="ok");
+      const medianSpread=median(validSnapshots.map(item=>Number(item.spread_fraction)));
+      const medianBuySlippage=median(validSnapshots.map(item=>Number(item.buy_slippage_fraction)));
+      const medianSellSlippage=median(validSnapshots.map(item=>Number(item.sell_slippage_fraction)));
+      const symbols=events.filter(event=>event.symbol&&Number.isFinite(Number(event.signal_price))&&["hold","buy","sell"].includes(event.signal));
+      const btc=symbols.filter(event=>event.symbol==="BTCIDR").sort((a,b)=>Number(a.candle_time)-Number(b.candle_time));
+      const benchmark=btc.length>1&&Number(btc[0].signal_price)>0?Number(btc[btc.length-1].signal_price)/Number(btc[0].signal_price)-1:null;
+      setValue("returnValue",percent(returnTotal),returnTotal>0?"positive":returnTotal<0?"negative":"neutral");
+      setValue("drawdownValue",percent(drawdown),drawdown>0?"negative":"neutral");
+      setValue("uptimeValue",planned===null?"—":`${completedSlots} / ${planned}`);
+      $("uptimeDetail").textContent=planned?`Uptime ${percent(completedSlots/planned)} · jadwal 4 jam UTC`:"Jadwal belum dikonfigurasi";
+      setValue("tradeCount",String(orders.length));
+      $("errorDetail").textContent=`Error API: ${errorCount} · kill switch: ${killCount}`;
+      $("killStatus").textContent=payload.kill_switch?"AKTIF — bot berhenti membuka posisi":"Tidak aktif";
+      $("killStatus").className=payload.kill_switch?"negative":"positive";
+      $("killButton").disabled=source!=="live";
+      $("killButton").textContent=payload.kill_switch?"Matikan":"Aktifkan";
+      $("backtestStatus").textContent=text(payload.backtest_status,"Belum tersedia");
+      const backtest=payload.backtest;
+      const backtestMetrics=backtest&&backtest.metrics?backtest.metrics:null;
+      const backtestRows=backtestMetrics?[
+        ["Return total",percent(backtestMetrics.total_return)],
+        ["CAGR",percent(backtestMetrics.cagr)],
+        ["Maximum drawdown",percent(backtestMetrics.max_drawdown)],
+        ["Profit factor",text(backtestMetrics.profit_factor)],
+        ["Win rate",percent(backtestMetrics.win_rate)],
+        ["Jumlah trade",text(backtestMetrics.trade_count)]
+      ]:[["Status",text(payload.backtest_status,"Belum ada hasil terverifikasi")],["CAGR","Belum tersedia"],["Maximum drawdown","Belum tersedia"],["Profit factor","Belum tersedia"],["Win rate","Belum tersedia"],["Jumlah trade","Belum tersedia"]];
+      $("backtestMetrics").replaceWith(safeMetricRows(backtestRows,"backtestMetrics"));
+      const forwardRows=[
+        ["Ekuitas terakhir",endEquity===null?"Belum ada":money(endEquity)],
+        ["Return total",percent(returnTotal)],
+        ["Maximum drawdown",percent(drawdown)],
+        ["Jumlah trade selesai",String(trades.length)],
+        ["Profit factor",grossLosses>0?(grossWins/grossLosses).toFixed(2):grossWins>0?"∞":"—"],
+        ["Win rate",trades.length?percent(gains.length/trades.length):"—"],
+        ["Rata-rata untung",gains.length?money(grossWins/gains.length):"—"],
+        ["Rata-rata rugi",losses.length?money(losses.reduce((sum,value)=>sum+value,0)/losses.length):"—"]
+      ];
+      $("forwardMetrics").replaceWith(safeMetricRows(forwardRows,"forwardMetrics"));
+      const costText=costRatio===null?"—":percent(costRatio);
+      const executionRows=[
+        ["Biaya order (fee + spread/slippage)",money(fees+spreadSlip)],
+        ["Fee tercatat",money(fees)],
+        ["Spread/slippage terestimasi dari book",money(spreadSlip)],
+        ["Porsi biaya / laba kotor",costText],
+        ["Snapshot book valid",`${validSnapshots.length} / ${snapshots.length}`],
+        ["Median spread terukur",percent(medianSpread)],
+        ["Median slippage buy / sell @ Rp10 juta",`${percent(medianBuySlippage)} / ${percent(medianSellSlippage)}`],
+        ["Buy & hold BTC/IDR",percent(benchmark)],
+        ["Gap return forward − benchmark",returnTotal===null||benchmark===null?"—":percent(returnTotal-benchmark)],
+        ["Return backtest 14 hari",backtest&&backtest.forward_window?percent(backtest.forward_window.total_return):"Belum tersedia"],
+        ["Kecocokan sinyal backtest vs forward",backtest&&backtest.forward_window?percent(backtest.forward_window.signal_match_rate):"Belum tersedia"]
+      ];
+      $("executionMetrics").replaceWith(safeMetricRows(executionRows,"executionMetrics"));
+      const body=$("eventsBody");
+      body.replaceChildren();
+      const rows=events.slice(0,100);
+      $("logCount").textContent=`${events.length} baris · menampilkan ${rows.length}`;
+      if(!rows.length){const tr=document.createElement("tr");const td=document.createElement("td");td.colSpan=5;td.className="empty";td.textContent="Log kosong — metrik tidak dibuat.";tr.append(td);body.append(tr)}
+      for(const event of rows){
+        const tr=document.createElement("tr");
+        const reason=event.reason||event.message||(Array.isArray(event.errors)?event.errors.map(error=>error.message).join("; "):"");
+        const orderText=Array.isArray(event.orders)?event.orders.map(order=>`${order.side} ${Number(order.quantity).toPrecision(6)} @ ${money(order.average_fill)} (fee ${money(order.fee_idr)})`).join("; "):"";
+        for(const value of [timeLabel(event.time),event.symbol||"—",event.signal||event.status||event.type||"—",reason||"—",orderText||"—"]){
+          const td=document.createElement("td");td.textContent=String(value);tr.append(td);
+        }
+        body.append(tr);
+      }
+      $("sourceLabel").textContent=source==="live"?"Data live dari API dashboard":"Data lokal dari file log";
+      $("updatedLabel").textContent=`Dibaca ${new Date().toLocaleString("id-ID",{timeZone:"Asia/Jakarta"})}`;
+      $("exportButton").disabled=false;
+      const notice=$("notice");
+      notice.className="notice "+(events.length?"ok":"");
+      notice.textContent=events.length?`Log aktual dimuat: ${events.length} event. Metrik tanpa sumber data yang cukup tetap ditampilkan sebagai belum tersedia.`:"Belum ada log. Tidak ada hasil simulasi atau metrik yang dibuat otomatis.";
+    }
+    async function loadLive(){
+      $("notice").className="notice";
+      $("notice").textContent="Mengambil /api/dashboard…";
+      $("serverHint").hidden=true;
+      try{
+        const response=await fetch("/api/dashboard",{cache:"no-store"});
+        if(!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+        report(await response.json(),"live");
+      }catch(error){
+        const trustedFolderError=String(error.message).toLowerCase().includes("trusted folder");
+        $("notice").className=trustedFolderError?"notice":"notice error";
+        $("notice").textContent=trustedFolderError
+          ?"Pratinjau VS Code memblokir permintaan API karena folder belum dipercaya. Buka dashboard melalui server lokal."
+          :`Data live tidak dapat dimuat: ${error.message}. Untuk mode offline, pilih file JSON hasil ekspor.`;
+        $("serverHint").hidden=!trustedFolderError;
+      }
+    }
+    $("refreshButton").addEventListener("click",loadLive);
+    $("importFile").addEventListener("change",async event=>{
+      const file=event.target.files&&event.target.files[0];if(!file)return;
+      try{const parsed=JSON.parse(await file.text());report(Array.isArray(parsed)?{events:parsed}:parsed,"offline")}
+      catch(error){$("notice").className="notice error";$("notice").textContent=`File JSON tidak valid: ${error.message}`}
+    });
+    $("exportButton").addEventListener("click",()=>{
+      if(!currentPayload)return;
+      const blob=new Blob([JSON.stringify(currentPayload,null,2)],{type:"application/json"});
+      const link=document.createElement("a");link.href=URL.createObjectURL(blob);link.download="indodax-dry-run-log.json";link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);
+    });
+    $("killButton").addEventListener("click",async()=>{
+      if(!currentPayload)return;
+      const enabled=!currentPayload.kill_switch;
+      const secret=prompt("Masukkan CRON_SECRET untuk mengubah kill switch:");
+      if(!secret)return;
+      try{
+        const response=await fetch("/api/kill-switch",{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${secret}`},body:JSON.stringify({enabled})});
+        if(!response.ok)throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+        await loadLive();
+      }catch(error){$("notice").className="notice error";$("notice").textContent=`Kill switch gagal diubah: ${error.message}`}
+    });
+    loadLive();
+  </script>
+</body>
+</html>

@@ -44,6 +44,8 @@ py -m unittest discover -s tests -v
 
 Buka `http://127.0.0.1:8000`. Endpoint:
 
+Jangan buka `static/index.html` atau `Azza Dashboard Trading.backup.html` memakai preview HTML VS Code untuk data live; preview dapat memblokir endpoint API dengan 403. Jalankan server di atas dan buka `http://127.0.0.1:8000/`. File HTML tetap bisa dibuka langsung untuk mengimpor log secara offline.
+
 - `GET /api/health` — mode, pasangan, dan timeframe.
 - `GET /api/dashboard` — state dan log forward test.
 - `POST /api/tick` — satu pemanggilan bot; wajib `Authorization: Bearer <CRON_SECRET>`.
