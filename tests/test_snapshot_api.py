@@ -31,6 +31,16 @@ class FakeIndodaxClient:
 
 
 class SnapshotEndpointTests(unittest.TestCase):
+    def test_dashboard_and_health_routes_are_available_without_secret(self):
+        with TestClient(main.app) as client:
+            dashboard = client.get("/")
+            health = client.get("/api/health")
+
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertIn("Azza Trading Bot", dashboard.text)
+        self.assertEqual(health.status_code, 200)
+        self.assertEqual(health.json()["timeframe"], "240")
+
     def test_snapshot_requires_secret_and_records_raw_books(self):
         with tempfile.TemporaryDirectory() as directory:
             main.app.state.store = LocalStore(os.path.join(directory, "state.json"))

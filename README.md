@@ -4,7 +4,7 @@ Bot long-only untuk pasangan IDR di Indodax. Bot membaca candle tertutup dan ord
 
 ## Status bahan UAS
 
-Kode tidak membuat atau mengarang hasil. Data OHLCV asli Indodax untuk lebih dari tiga tahun kini tersimpan di `data/indodax_4h_history.json`, dan tarif resmi telah dibuktikan di `fee-evidence.json`. Satu snapshot nyata per pasangan dari 12 November belum memenuhi kebutuhan minimal enam snapshot pada sedikitnya dua hari, sehingga backtest berbiaya terukur belum dapat diterbitkan. Pada 14 November, satu pemanggilan dry-run manual dengan API publik mencatat sinyal BTCIDR SELL, ETHIDR SELL, dan XRPIDR HOLD ke state lokal `.bot_data.json`; log itu hanya pilot lokal, bukan forward test 14 hari. Ekspor lama `indodax-dry-run-log.json` tetap kosong. Status Vercel melaporkan deployment commit `bbefbed` selesai, tetapi URL deployment yang diuji meminta login Vercel, sehingga akses publik dan API produksi belum terverifikasi. Run GitHub Actions tick terakhir gagal sebelum menghubungi aplikasi karena secret `CRON_SECRET` dan variable `VERCEL_DEPLOYMENT_URL` kosong; konfigurasi Upstash/Vercel dan `FORWARD_START_AT` produksi belum dapat diperiksa. Belum ada forward test 14 hari atau bukti freeze 5 November. Metrik tanpa bukti tetap ditampilkan sebagai belum tersedia.
+Kode tidak membuat atau mengarang hasil. Data OHLCV asli Indodax untuk lebih dari tiga tahun kini tersimpan di `data/indodax_4h_history.json`, dan tarif resmi telah dibuktikan di `fee-evidence.json`. Satu snapshot nyata per pasangan dari 12 November belum memenuhi kebutuhan minimal enam snapshot pada sedikitnya dua hari, sehingga backtest berbiaya terukur belum dapat diterbitkan. Pada 14 November, satu pemanggilan dry-run manual dengan API publik mencatat sinyal BTCIDR SELL, ETHIDR SELL, dan XRPIDR HOLD ke state lokal `.bot_data.json`; log itu hanya pilot lokal, bukan forward test 14 hari. Ekspor lama `indodax-dry-run-log.json` tetap kosong. Deployment Vercel untuk commit `e57dfcb` selesai dibangun, tetapi domain production yang diberikan mengembalikan HTTP 404 pada `/`, `/api/health`, dan `/api/dashboard`. Konfigurasi routing telah diarahkan ke entrypoint FastAPI `main.py`; hasil deployment perbaikan masih perlu diuji. Run GitHub Actions tick terakhir gagal sebelum menghubungi aplikasi karena secret `CRON_SECRET` dan variable `VERCEL_DEPLOYMENT_URL` kosong; konfigurasi Upstash/Vercel dan `FORWARD_START_AT` produksi belum dapat diperiksa. Belum ada forward test 14 hari atau bukti freeze 5 November. Metrik tanpa bukti tetap ditampilkan sebagai belum tersedia.
 
 ## Strategi yang dikodekan
 
@@ -58,7 +58,7 @@ Penyimpanan lokal menggunakan `.bot_data.json`. File ini diabaikan Git. Data lok
 
 ## Deploy ke Vercel dan penjadwal 4 jam
 
-`api/index.py` mengekspos FastAPI dan `vercel.json` mengarahkan request ke aplikasi. Vercel menggunakan runtime Python 3.12 yang dipatok di `.python-version`. Pasang environment variables berikut di Vercel:
+Vercel memakai `main.py` sebagai entrypoint FastAPI dan `vercel.json` mempertahankan batas durasi function 300 detik tanpa rewrite path. Vercel menggunakan runtime Python 3.12 yang dipatok di `.python-version`. Pasang environment variables berikut di Vercel:
 
 - `CRON_SECRET` — secret kuat dan sama dengan GitHub Actions secret.
 - `UPSTASH_REDIS_REST_URL` dan `UPSTASH_REDIS_REST_TOKEN` — Upstash Redis REST untuk state, lock, dan log persisten.
@@ -109,5 +109,5 @@ Refleksi kuantitatif belum dapat disimpulkan sebelum forward log lengkap dan bac
 - `run_indodax_backtest.py` — jalankan strategi bersama dengan biaya median dari snapshot yang diukur; opsi `--forward-log indodax-dry-run-log.json` membandingkan sinyal per candle serta fill per order pada jendela forward yang sama.
 - `fee-evidence.json` — tarif taker resmi per sisi dan perbandingan API publik, diakses 12 November 2026.
 - `CHANGELOG.md` — catatan perbaikan pasca-freeze untuk audit forward test.
-- `api/index.py`, `vercel.json`, `.github/workflows/` — deploy, scheduler tick, dan pengambilan snapshot.
+- `main.py`, `vercel.json`, `.github/workflows/` — API Vercel, scheduler tick, pengambilan snapshot, dan tes CI.
 Arsip dashboard/backtest Kompas100 lama yang ada di folder kerja bukan bagian dari aplikasi Indodax ini dan tidak disertakan dalam repository.
