@@ -37,7 +37,8 @@ class SnapshotEndpointTests(unittest.TestCase):
             health = client.get("/api/health")
 
         self.assertEqual(dashboard.status_code, 200)
-        self.assertIn("Azza Trading Bot", dashboard.text)
+        backup_html = main.BASE_DIR / "Azza Dashboard Trading.backup.html"
+        self.assertEqual(dashboard.content, backup_html.read_bytes())
         self.assertEqual(health.status_code, 200)
         self.assertEqual(health.json()["timeframe"], "240")
 

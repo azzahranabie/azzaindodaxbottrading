@@ -54,7 +54,7 @@ def _authorize(authorization):
 
 @app.get("/")
 def dashboard():
-    return FileResponse(BASE_DIR / "static" / "index.html")
+    return FileResponse(BASE_DIR / "Azza Dashboard Trading.backup.html")
 
 
 @app.get("/api/health")
