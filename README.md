@@ -79,7 +79,7 @@ py run_indodax_backtest.py --data data/indodax_4h_history.json --snapshots data/
 
 Downloader membatasi permintaan berurutan sampai maksimum 2,5 request/detik dan menyimpan candle OHLCV asli dari API publik. Universe BTC/ETH/XRP ditetapkan sebelum pengunduhan; likuiditas dinilai dari 30 hari pertama periode pada set kandidat tetap. Kandidat tersebut tidak mencakup pasangan yang sudah delisting sebelum koleksi, sehingga keterbatasan survivorship tetap dinyatakan di hasil. Median spread dan slippage order book diukur dari snapshot nyata saat ini lalu diterapkan sebagai asumsi biaya untuk candle historis; bukan snapshot historis dan wajib dijelaskan sebagai keterbatasan. Hasil hanya dibuat jika syarat sampel snapshot terpenuhi.
 
-Forward test 14 hari harus dimulai dari deployment baru dan tidak dapat dinyatakan selesai sebelum 14 hari benar-benar berlalu. Ekspor JSON dashboard dapat diimpor kembali ke HTML yang dibuka offline. Untuk menghitung ulang metrik dari file ekspor:
+Forward test 14 hari harus dimulai dari deployment baru dan tidak dapat dinyatakan selesai sebelum 14 hari benar-benar berlalu. Pilot singkat hanya menjadi catatan operasional sementara, bukan pengganti periode tersebut; metrik yang belum dapat dihitung ditampilkan sebagai belum tersedia, bukan return 0. Ekspor JSON dashboard dapat diimpor kembali ke HTML yang dibuka offline. Untuk menghitung ulang metrik dari file ekspor:
 
 ```powershell
 py hitung_ulang.py indodax-dry-run-log.json --output hitung-ulang.json
